@@ -10,5 +10,5 @@ My hands-on lab for learning cloud/DevOps infrastructure. Started July 2026.
 - VMs (on TC1, local-lvm storage):
   - VM 100 — Ubuntu Server 24.04 —
   - VM 101 — Ubuntu Server 24.04 — 
-- NAS (16TB) — backups + ISOs, not VM disks
+- NAS (16TB) — backups + ISOs, not VM disk
 
