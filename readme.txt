@@ -1,7 +1,8 @@
 # Homelab
 
 My hands-on lab for learning cloud/DevOps infrastructure. Started July 2026.
-
+All the images will be saved in Image folder
+Working on making a netwrk layout now
 ## Current setup
 
 - 2-node Proxmox VE 9.2.2 cluster ("Homelab")
