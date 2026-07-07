@@ -18,5 +18,7 @@ whats happening
 On 5th of july I got the two thincentrre set upp with proxmox and made cluster and installed two vms (both ubutu server)
 Then I relized taht there are voting system in proxmox so both device had one vote wich gives me no reduncy lol
 
+on 6th july i got one more thincentre ready for proxmox so in total now i have 3 lenov thincentre 
+
 
 
