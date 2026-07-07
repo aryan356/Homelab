@@ -13,3 +13,10 @@ Working on making a netwrk layout now
   - VM 101 — Ubuntu Server 24.04 — 
 - NAS (16TB) — backups + ISOs, not VM disk
 
+
+whats happening
+On 5th of july I got the two thincentrre set upp with proxmox and made cluster and installed two vms (both ubutu server)
+
+
+
+
