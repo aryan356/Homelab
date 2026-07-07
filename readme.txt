@@ -19,6 +19,7 @@ On 5th of july I got the two thincentrre set upp with proxmox and made cluster a
 Then I relized taht there are voting system in proxmox so both device had one vote wich gives me no reduncy lol
 
 on 6th july i got one more thincentre ready for proxmox so in total now i have 3 lenov thincentre 
+Also got a switch since old one wsas a 5 port swith now its 10 port switch still unmanaged but good enough 
 
 
 
