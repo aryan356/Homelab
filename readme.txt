@@ -23,3 +23,5 @@ Also got a switch since old one wsas a 5 port swith now its 10 port switch still
 
 now wathcing some proffeeso messer video to gain more insifgts 
 
+
+Setup complete - SSH key working, repo cloned to local disk. 2026-07-20
