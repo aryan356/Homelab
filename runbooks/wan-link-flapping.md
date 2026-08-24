@@ -1,95 +1,145 @@
 # Runbook: WAN Link Flapping
 
-Write-up of a real outage. The root cause turned out to be mundane, but two
-diagnostic traps made it take far longer than it should have.
+Write-up of a real outage that recurred repeatedly over one evening. The root
+cause was a failing USB network adapter. Getting there took far longer than it
+should have, because three separate diagnostics lie about this particular fault.
 
 ## Symptom
 
-Internet dead. The WAN interface alternated between `active` and `no carrier`,
-and the kernel log filled with link transitions:
+Internet dead or wildly intermittent. The WAN interface alternates between
+`active` and `no carrier`:
 
 ```
 ue0: link state changed to DOWN
 ue0: link state changed to UP
-ue0: link state changed to DOWN
 ue0: 3 link states coalesced
 ```
 
-Roughly **23 transitions per minute**. Load average climbed as DHCP and routing
-reconfigured on every bounce.
+Downstream effects that look like separate problems but are not:
 
-## Trap 1: ping is useless on this link
+- **Unbound returns SERVFAIL** or stops answering — it cannot reach upstream
+  resolvers while the link is down
+- **The default route disappears** and does not come back
+- **Clients report "no internet"** even though the LAN is healthy
+- Load average climbs as DHCP and routing reconfigure on every bounce
+
+Chasing any of these individually is wasted effort. Check the WAN link first.
+
+## Trap 1: ping is useless here
 
 The ISP filters ICMP through Advanced DMZ. `ping 1.1.1.1` reports **100% packet
 loss even when the connection is perfectly healthy**.
 
-This sent the initial diagnosis in the wrong direction entirely. Test with DNS
-and a real TCP transfer instead:
+Test with DNS and a real TCP transfer instead:
 
 ```sh
-drill -Q opnsense.org
-
-curl -s --max-time 30 -o /dev/null \
-  -w "http=%{http_code} speed=%{speed_download} B/s\n" \
+drill -Q opnsense.org @47.55.55.55
+curl -s --max-time 30 -o /dev/null -w "http=%{http_code}\n" \
   http://cachefly.cachefly.net/100mb.test
 ```
 
-## Trap 2: an intermittent link looks fine at the wrong moment
+## Trap 2: the dmesg counter is worthless
 
-Traffic slips through between flaps, so a page that loads proves nothing. Count
-kernel events over a fixed window and get a rate instead:
+`dmesg` is a **rotating ring buffer**. Counting `link state` lines and comparing
+across a window produces **negative deltas** when the buffer rotates, which reads
+as "not flapping" when the link is in fact flapping badly.
+
+This trap fired twice in one evening and sent the diagnosis down the wrong path
+both times. **Do not count dmesg lines.**
+
+## The diagnostic that actually works
+
+Sample interface status directly. This is the only reliable check:
 
 ```sh
 ssh -o BatchMode=yes root@192.168.1.1 sh <<'SCRIPT'
-B=`dmesg | grep -cE 'ue0: link state'`
-sleep 60
-A=`dmesg | grep -cE 'ue0: link state'`
-echo "flaps in 60s: `expr $A - $B`"
+i=0; up=0; down=0
+while [ $i -lt 20 ]; do
+  s=`ifconfig ue0 | grep -o 'status: [a-z ]*'`
+  echo "$s" | grep -q active && up=`expr $up + 1` || { down=`expr $down + 1`; echo "t+`expr $i \* 3`s DROP"; }
+  i=`expr $i + 1`; sleep 3
+done
+echo "active: $up/20  drops: $down/20"
 SCRIPT
 ```
 
-`dmesg` is a **rotating ring buffer**, so the absolute count can go *down*
-between samples. Only the delta over a window means anything.
+A healthy link is 20/20. Even **1 drop in 20** is a failing link — that is enough
+to tear down the default route and take everything offline.
 
-## Narrowing it down
+## Trap 3: intermittent links look fine at the wrong moment
 
-The USB device stayed enumerated the entire time — no detach or re-attach events.
-Only the *ethernet* PHY was bouncing. That ruled out USB power and enumeration
-problems and pointed at the RJ45 side: cable, switch port, or the adapter's PHY.
+Traffic slips through between drops, so a page that loads, a successful `curl`,
+or a DNS answer proves nothing. A test that passes once and fails a minute later
+is not a flaky test — it is an intermittent link. Always sample over a window.
 
-A useful cable test: gigabit needs all four twisted pairs, 100 Mbit needs only
-two. If forcing 100 Mbit stabilises the link, a pair is damaged. This is
-transient and reverts on reboot:
+## Isolating the fault: test the cable on another NIC
 
-```sh
-ifconfig ue0 media 100baseTX mediaopt full-duplex
-ifconfig ue0 media autoselect              # revert
+The decisive test. Unplug the WAN cable from the firewall and plug it straight
+into a desktop PC, leaving the cable and switch port unchanged. Then check what
+the PC's NIC negotiates under load:
+
+```powershell
+Get-NetAdapter -Name 'Ethernet' | Select-Object LinkSpeed,MediaConnectionState
+Get-NetAdapterStatistics -Name 'Ethernet' |
+  Select-Object ReceivedPacketErrors,ReceivedDiscardedPackets,OutboundPacketErrors
 ```
 
-## Root cause
+Gigabit needs all four twisted pairs. **If the cable negotiates a stable
+1 Gbps and moves real data with zero errors, the cable is sound** and the fault
+is the adapter. Damaged pairs cannot sustain gigabit — they drop to 100 Mbit or
+accumulate errors under load.
 
-**The ethernet cable.**
+## Root cause: the USB adapter
 
-Cable and USB port were changed at the same time, which initially left the cause
-ambiguous — and the USB 3.0 port got the blame, because the adapter drew 72 mA
-there versus 350 mA in the USB 2.0 port. That power difference looked meaningful
-and was a red herring: it is simply normal USB 3.0 versus 2.0 negotiation.
+**The Realtek RTL8153 USB gigabit adapter was failing.** Not the cable, not the
+USB port, not the switch port.
 
-Isolating the variable afterwards settled it. Back in a USB 3.0 port with the
-**new** cable: zero flaps at SUPER speed. The port was never at fault.
+It degraded progressively over one evening:
 
-| | Old cable, USB 3.0 | New cable, USB 2.0 | New cable, USB 3.0 |
-|---|---|---|---|
-| USB speed | SUPER 5 Gbps | HIGH 480 Mbps | SUPER 5 Gbps |
-| Flaps/min | ~23 | 0 | **0** |
-| Throughput | unusable | ~310 Mbps | **908 Mbps** |
+1. Intermittent flapping at gigabit
+2. Flapping even when forced to 100 Mbit
+3. No link at all
 
-## If it happens again
+### The wrong turn — recorded so it is not repeated
 
-1. **Replace the cable first.** It is the proven cause.
-2. Confirm the adapter is on USB 3.0 — `usbconfig list | grep -i rtl8153`
-   should report `SUPER (5.0Gbps)`, not `HIGH (480Mbps)`.
-3. Check `netstat -i -I ue0` for errors. Zero errors with poor throughput means
-   a bandwidth ceiling, not a faulty link.
-4. Change one variable at a time and measure the flap rate after each. Changing
-   two at once is what made this take an extra hour.
+The cable was blamed first, and this document previously said so. That conclusion
+came from changing **two variables at once** — a new cable *and* a different USB
+port — and the flapping stopped. It looked solved.
+
+It was not. The reseat merely perturbed a dying adapter into working briefly.
+Every recurrence afterwards was the adapter degrading further.
+
+A power-draw difference between ports (72 mA on USB 3.0 versus 350 mA on USB 2.0)
+was also read as meaningful. It is not — that is normal USB 3.0 versus 2.0
+negotiation, and it was a red herring.
+
+### The evidence that settled it
+
+Same cable, same ISP router port, same building — only the adapter differed:
+
+| | On the RTL8153 dongle | On a desktop PCIe NIC |
+|---|---|---|
+| Link drops | Constant | **0 in 60s** |
+| Negotiated speed | Flapped; needed 100 Mbit forcing | **Stable 1 Gbps** |
+| Data moved | Link unusable | **179 MB** |
+| RX / TX errors | — | **0 / 0** |
+
+## Resolution
+
+**Replace the USB adapter with a real NIC.** No configuration fixes a failing
+adapter, and forcing 100 Mbit only reduces the flapping rather than stopping it.
+
+A USB dongle is acceptable on a laptop dock. As the internet-facing interface on
+a router expected to run unattended, it is the weakest component in the build and
+the single point of failure for the entire network.
+
+## Lessons
+
+1. **Check the WAN link before anything else.** DNS failures, missing default
+   routes and dead clients are all downstream symptoms.
+2. **Never count dmesg lines.** Sample `ifconfig` status over a window.
+3. **Change one variable at a time.** Changing two together produced a wrong root
+   cause that stood for hours.
+4. **Move the suspect component, not the consumables.** Swapping cables repeatedly
+   proved nothing. Putting the same cable on a different NIC settled it in 60
+   seconds.
