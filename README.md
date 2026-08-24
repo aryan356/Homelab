@@ -11,7 +11,7 @@ which are usually the parts worth writing down.
 | Area | Status |
 |---|---|
 | Proxmox cluster | 2 nodes running, 3rd node staged |
-| Edge firewall | OPNsense — single NAT, full gigabit WAN |
+| Edge firewall | OPNsense — single NAT achieved; **WAN NIC failed, migration pending** |
 | Wireless | Access point on the firewall LAN — clients migrated and filtered |
 | ISP radios | Retired by rename — nothing rejoins them |
 | Segmentation | **Partial** — cluster still sits upstream of the firewall |
@@ -24,7 +24,8 @@ which are usually the parts worth writing down.
 |---|---|---|---|
 | TC1 | Proxmox node | i7 (10th gen) | 24 GB |
 | TC2 | Proxmox node | Ryzen 5 | 16 GB |
-| TC3 | OPNsense firewall | Ryzen PRO | — |
+| TC3 | OPNsense firewall (migrating off) | Ryzen PRO | — |
+| OptiPlex | Replacement firewall — dual onboard NIC | — | — |
 | AP | D-Link DIR-822 wireless access point | — | — |
 | NAS | Backups + ISOs (16 TB) | — | — |
 | Switch | 10-port, unmanaged | — | — |
