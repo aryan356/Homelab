@@ -16,27 +16,29 @@ Edge firewall and router for the lab.
 
 | Name | Device | Role | Notes |
 |---|---|---|---|
-| WAN | `ue0` | Realtek RTL8153, USB gigabit | **FAILED — being replaced** |
+| WAN | `ue0` | Realtek RTL8153, USB gigabit | **Unusable under FreeBSD — migrating** |
 | LAN | `re0` | Realtek RTL8111/8168, PCIe gigabit | Onboard |
 
-### The USB NIC failed
+### The USB NIC does not work reliably here
 
-**This adapter died and is being replaced with real NICs.** Keeping the notes
-here because the failure mode is worth recognising early.
+**The WAN adapter is unusable on this machine under FreeBSD**, and the firewall
+is being migrated to hardware with onboard NICs.
 
-It degraded over a single evening: intermittent link flapping at gigabit, then
-flapping even when forced to 100 Mbit, then no link at all. Along the way it
-took down DNS, tore out the default route repeatedly, and produced a series of
-symptoms that each looked like a separate problem. Full write-up in
+It flapped constantly: intermittent link loss at gigabit, still flapping when
+forced to 100 Mbit, eventually no link at all. Along the way it took down DNS,
+repeatedly tore out the default route, and produced a string of symptoms that
+each looked like an independent problem.
+
+**The hardware itself is fine.** Both the cable and the adapter were later tested
+on a Windows desktop and each moved over 100 MB at a stable 1 Gbps with zero
+errors and zero drops. The fault only appears on this host under FreeBSD, which
+points at the `ure`/`cdce` driver or USB power management rather than anything
+physically broken. Full evidence table in
 [../runbooks/wan-link-flapping.md](../runbooks/wan-link-flapping.md).
 
-The cable was blamed twice before the adapter was properly isolated. The test
-that settled it: put the same cable on a desktop PCIe NIC — it held a stable
-1 Gbps for 179 MB under load with zero errors, which a damaged cable cannot do.
-
-**Do not use a USB ethernet adapter as the WAN interface on a router.** It is
-fine on a laptop dock. On the one device the whole network depends on, running
-unattended, it is the weakest component in the build.
+**Avoid USB ethernet as the WAN interface on a router.** Even when the adapter is
+healthy, it adds a driver and a bus the rest of the build does not need — and
+when that combination misbehaves it takes the whole network with it.
 
 ### Bus speed gotcha (while a USB adapter is still in use)
 

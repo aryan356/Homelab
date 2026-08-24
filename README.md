@@ -11,7 +11,7 @@ which are usually the parts worth writing down.
 | Area | Status |
 |---|---|
 | Proxmox cluster | 2 nodes running, 3rd node staged |
-| Edge firewall | OPNsense — single NAT achieved; **WAN NIC failed, migration pending** |
+| Edge firewall | OPNsense — single NAT achieved; **WAN NIC unstable, migration pending** |
 | Wireless | Access point on the firewall LAN — clients migrated and filtered |
 | ISP radios | Retired by rename — nothing rejoins them |
 | Segmentation | **Partial** — cluster still sits upstream of the firewall |
