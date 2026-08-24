@@ -97,6 +97,71 @@ route print -4
 If a wireless client shows an address from a different subnet, or a gateway that
 is not `192.168.1.1`, the AP is still routing.
 
+## Retiring the ISP wireless
+
+Standing up the access point does not by itself remove the unfiltered wireless
+path — it only adds a filtered one. Until the ISP router's radios stop being
+used, clients can sit on either side of the firewall.
+
+### The SSID collision hazard
+
+The ISP router and the access point were initially given near-identical network
+names. That is normally a good idea — clients treat one SSID as one network and
+roam to the strongest signal.
+
+Here it is actively dangerous. The two networks sit on **opposite sides of the
+firewall**. Identical SSIDs mean devices silently drift between filtered and
+unfiltered depending on signal strength, with nothing in the UI to indicate
+which side they are on. The lab would look correctly segmented while half the
+traffic bypassed it.
+
+**Keep the two names clearly distinct**, or remove one entirely.
+
+### The Giga Hub has no radio switch where you expect it
+
+On the ISP router, **Manage my Wi-Fi** exposes only SSID, password, and a
+**Whole Home Wi-Fi** toggle. That toggle controls mesh and band-steering
+optimisation — it is **not** a radio on/off switch. Turning it off leaves the
+radios broadcasting.
+
+Per-band radio control lives under **Advanced tools and settings → Wi-Fi**, and
+some firmware revisions only expose it through the ISP's mobile app.
+
+### What was done instead
+
+The ISP SSID was **renamed**. This turned out to be simpler and just as
+effective:
+
+- Every wireless client immediately dropped, because the network they had saved
+  no longer exists
+- Reconnecting means choosing the access point's SSID, so devices migrate
+  without being configured individually
+- Nothing can accidentally rejoin the unfiltered network later
+
+Radios still broadcast, but with a name nothing has saved and a password nothing
+knows. Disabling them outright is tidier and still worth doing, but it is no
+longer load-bearing.
+
+### Do not power down the ISP router
+
+It must keep running. The firewall's WAN plugs into it and receives the public
+IP through it via Advanced DMZ — see
+[bell-advanced-dmz.md](bell-advanced-dmz.md). Only the radios are being retired,
+never the device.
+
+### Verifying the migration
+
+Count clients holding leases from the firewall, not from the ISP router:
+
+```sh
+cat /var/db/dnsmasq.leases
+arp -an | grep 192.168.1
+```
+
+Cross-check against the device list in the ISP router's UI. Anything still
+listed there as *wireless* has not migrated yet. Expect a gap — wired hosts and
+sleeping devices both show up there and neither is a problem.
+
 ## Known issue: IPv6 router advertisements
 
 The DIR-822 continues sending IPv6 Router Advertisements, claiming to be an IPv6
