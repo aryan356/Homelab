@@ -89,49 +89,64 @@ Gigabit needs all four twisted pairs. **If the cable negotiates a stable
 is the adapter. Damaged pairs cannot sustain gigabit — they drop to 100 Mbit or
 accumulate errors under load.
 
-## Root cause: the USB adapter
+## Root cause: FreeBSD/USB specific — not the cable, not the adapter
 
-**The Realtek RTL8153 USB gigabit adapter was failing.** Not the cable, not the
-USB port, not the switch port.
+Both the cable and the USB adapter were **proven good in isolation**. The fault
+appears only when that adapter runs on this machine under FreeBSD.
 
-It degraded progressively over one evening:
+### The evidence
 
-1. Intermittent flapping at gigabit
-2. Flapping even when forced to 100 Mbit
-3. No link at all
+Three tests, same cable and same ISP router port throughout. Only the adapter
+and the host operating system changed:
 
-### The wrong turn — recorded so it is not repeated
+| Test | Link drops / 60s | Speed | Data moved | Errors |
+|---|---|---|---|---|
+| Cable → desktop PCIe NIC (Windows) | **0** | 1 Gbps stable | 179 MB | **0** |
+| Cable → RTL8153 dongle → desktop (Windows) | **0** | 1 Gbps stable | 119 MB | **0** |
+| Cable → RTL8153 dongle → firewall (FreeBSD) | Constant | Flapped; needed 100 Mbit forcing | unusable | — |
 
-The cable was blamed first, and this document previously said so. That conclusion
-came from changing **two variables at once** — a new cable *and* a different USB
-port — and the flapping stopped. It looked solved.
+The identical dongle that was unusable on the firewall moved 119 MB at gigabit
+on Windows without a single drop or error, minutes later.
 
-It was not. The reseat merely perturbed a dying adapter into working briefly.
-Every recurrence afterwards was the adapter degrading further.
+### What that leaves
 
-A power-draw difference between ports (72 mA on USB 3.0 versus 350 mA on USB 2.0)
-was also read as meaningful. It is not — that is normal USB 3.0 versus 2.0
-negotiation, and it was a red herring.
+- FreeBSD's driver for the RTL8153 (`ure` / `cdce`)
+- USB power management or autosuspend behaviour on that host under FreeBSD
+- Some interaction between the two
 
-### The evidence that settled it
+Not a dead adapter, and **not the cabling** — which is what two rounds of cable
+swapping wrongly suggested.
 
-Same cable, same ISP router port, same building — only the adapter differed:
+### Two wrong conclusions, recorded so they are not repeated
 
-| | On the RTL8153 dongle | On a desktop PCIe NIC |
-|---|---|---|
-| Link drops | Constant | **0 in 60s** |
-| Negotiated speed | Flapped; needed 100 Mbit forcing | **Stable 1 Gbps** |
-| Data moved | Link unusable | **179 MB** |
-| RX / TX errors | — | **0 / 0** |
+**First: "the cable is at fault."** This came from changing two variables at once
+— a new cable *and* a different USB port — after which the flapping stopped. It
+looked solved; it was coincidence.
+
+**Second: "the adapter has failed."** Reached after the cable tested clean on a
+desktop NIC. Correct that the cable was innocent, wrong about the adapter, because
+the adapter itself was never tested in isolation until later.
+
+A power-draw difference between USB ports (72 mA on USB 3.0 versus 350 mA on
+USB 2.0) was also read as meaningful. It is not — that is normal USB 3.0 versus
+2.0 negotiation, and it was a red herring.
+
+The general lesson: **test each component on a known-good host before concluding
+anything.** Swapping consumables proves nothing.
 
 ## Resolution
 
-**Replace the USB adapter with a real NIC.** No configuration fixes a failing
-adapter, and forcing 100 Mbit only reduces the flapping rather than stopping it.
+**Move the firewall onto hardware with real onboard NICs.** Onboard interfaces
+use entirely different drivers and no USB stack, so this failure mode disappears
+regardless of which layer is actually responsible.
 
-A USB dongle is acceptable on a laptop dock. As the internet-facing interface on
-a router expected to run unattended, it is the weakest component in the build and
-the single point of failure for the entire network.
+No configuration fixes it. Forcing 100 Mbit reduced the flapping but never
+stopped it, and reseating cables bought minutes at a time.
+
+Broader point: a USB ethernet adapter is fine on a laptop dock. As the
+internet-facing interface on a router expected to run unattended, it adds a
+driver and a bus that the rest of the build does not need — and when it misbehaves
+it takes DNS, routing and every client down with it.
 
 ## Lessons
 
@@ -141,5 +156,8 @@ the single point of failure for the entire network.
 3. **Change one variable at a time.** Changing two together produced a wrong root
    cause that stood for hours.
 4. **Move the suspect component, not the consumables.** Swapping cables repeatedly
-   proved nothing. Putting the same cable on a different NIC settled it in 60
-   seconds.
+   proved nothing. Testing the cable *and* the adapter separately on a known-good
+   host settled it in two minutes each.
+5. **A component that fails in one host is not necessarily broken.** Prove it on
+   different hardware before declaring it dead — the driver and the host bus are
+   part of the system under test.
