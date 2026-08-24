@@ -16,28 +16,43 @@ Edge firewall and router for the lab.
 
 | Name | Device | Role | Notes |
 |---|---|---|---|
-| WAN | `ue0` | Realtek RTL8153, USB gigabit | **Must sit in a USB 3.0 port** |
+| WAN | `ue0` | Realtek RTL8153, USB gigabit | **FAILED — being replaced** |
 | LAN | `re0` | Realtek RTL8111/8168, PCIe gigabit | Onboard |
 
-### The USB NIC caveat
+### The USB NIC failed
 
-The WAN interface is a USB dongle rather than a real NIC. It works and currently
-sustains ~908 Mbps, but it must be plugged into a **USB 3.0** port.
+**This adapter died and is being replaced with real NICs.** Keeping the notes
+here because the failure mode is worth recognising early.
 
-In a USB 2.0 port the ethernet side still negotiates gigabit while the USB bus
-caps at 480 Mbps signalling, which yields roughly 310 Mbps of real throughput.
-The interface reports a healthy gigabit link and zero errors, so the ceiling is
-invisible unless you check the bus:
+It degraded over a single evening: intermittent link flapping at gigabit, then
+flapping even when forced to 100 Mbit, then no link at all. Along the way it
+took down DNS, tore out the default route repeatedly, and produced a series of
+symptoms that each looked like a separate problem. Full write-up in
+[../runbooks/wan-link-flapping.md](../runbooks/wan-link-flapping.md).
+
+The cable was blamed twice before the adapter was properly isolated. The test
+that settled it: put the same cable on a desktop PCIe NIC — it held a stable
+1 Gbps for 179 MB under load with zero errors, which a damaged cable cannot do.
+
+**Do not use a USB ethernet adapter as the WAN interface on a router.** It is
+fine on a laptop dock. On the one device the whole network depends on, running
+unattended, it is the weakest component in the build.
+
+### Bus speed gotcha (while a USB adapter is still in use)
+
+A USB adapter must sit in a **USB 3.0** port. In USB 2.0 the ethernet side still
+negotiates gigabit while the bus caps at 480 Mbps signalling, giving roughly
+310 Mbps of real throughput. The interface reports a healthy gigabit link and
+zero errors, so the ceiling is invisible unless the bus is checked:
 
 ```sh
 usbconfig list | grep -i rtl8153
 # SUPER (5.0Gbps) = USB 3.0, good
-# HIGH  (480Mbps) = USB 2.0, throttled
+# HIGH  (480Mbps) = USB 2.0, throttled to ~310 Mbps
 ```
 
-A low-profile Intel i210/i350 PCIe card would retire the dongle entirely. Not
-urgent while USB 3.0 delivers line rate, but it removes a fragile component from
-the one device everything else depends on.
+The 72 mA versus 350 mA power difference between USB 3.0 and 2.0 is normal
+negotiation, **not** a fault signal. It was misread as one during diagnosis.
 
 ## Firewall posture
 
