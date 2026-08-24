@@ -12,7 +12,8 @@ which are usually the parts worth writing down.
 |---|---|
 | Proxmox cluster | 2 nodes running, 3rd node staged |
 | Edge firewall | OPNsense — single NAT, full gigabit WAN |
-| Wireless | Access point on the firewall LAN — clients filtered |
+| Wireless | Access point on the firewall LAN — clients migrated and filtered |
+| ISP radios | Retired by rename — nothing rejoins them |
 | Segmentation | **Partial** — cluster still sits upstream of the firewall |
 
 ---
@@ -69,9 +70,11 @@ The Proxmox nodes still live on `192.168.2.0/24`, which is **upstream of
 OPNsense**. Their traffic reaches the internet through the ISP router and never
 traverses the firewall.
 
-Wireless used to have the same problem and no longer does — the access point
-bridges onto the filtered segment. Moving the cluster is the last remaining
-piece; see [Roadmap](#roadmap).
+Wireless used to have the same problem and no longer does. The access point
+bridges onto the filtered segment, and the ISP radios were retired so nothing
+drifts back — see [wireless-ap.md](docs/wireless-ap.md#retiring-the-isp-wireless).
+
+Moving the cluster is the last remaining piece; see [Roadmap](#roadmap).
 
 ---
 
@@ -111,7 +114,8 @@ and the docs are unreadable without them.
 ## Roadmap
 
 - [x] Add a dedicated access point on the firewall LAN
-- [ ] Migrate remaining devices off the ISP radios, then disable them
+- [x] Migrate wireless clients off the ISP radios
+- [ ] Disable the ISP radios outright — optional now that nothing joins them
 - [ ] Move the Proxmox nodes behind OPNsense so cluster traffic is filtered
 - [ ] Disable IPv6 router advertisements on the AP (see wireless-ap.md)
 - [ ] Replace the unmanaged switch with a managed one and introduce VLANs
